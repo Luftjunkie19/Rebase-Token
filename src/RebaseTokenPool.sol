@@ -27,8 +27,8 @@ contract RebaseTokenPool is TokenPool {
 
         lockOrBurnOut = Pool.LockOrBurnOutV1({
             amount: lockOrBurnIn.amount,
-            destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector),
-        })
+            destTokenAddress: getRemoteToken(lockOrBurnIn.remoteChainSelector)
+        });
     }
 
     function releaseOrMint(
