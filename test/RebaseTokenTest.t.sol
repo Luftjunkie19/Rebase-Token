@@ -138,7 +138,7 @@ contract RebaseTokenTest is Test {
     function testCannotCallMintAndBurn() public {
         vm.prank(user);
         vm.expectRevert(Ownable.OwnableUnauthorizedAccount.selector);
-        rebaseToken.mint(user, 100);
+        rebaseToken.mint(user, 100, rebaseToken.getInterestRate());
         vm.expectRevert(Ownable.OwnableUnauthorizedAccount.selector);
         rebaseToken.burn(user, 100);
     }

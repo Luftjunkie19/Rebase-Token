@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+// This is the interface for the RebaseToken contract
+// It defines the functions that the RebaseToken contract must implement
+// and allows other contracts to interact with it without needing to know the details of its implementation
 interface IRebaseToken {
     function mint(address _to, uint256 _amount, uint256 _rate) external;
 
