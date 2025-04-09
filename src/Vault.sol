@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.24;
 
+import {console} from "../lib/forge-std/src/Console.sol";
 import "./intefaces/IRebaseToken.sol";
 
 // The purpose of this contract is to act as a vault for the rebase token
@@ -29,8 +30,12 @@ contract Vault {
     receive() external payable {}
 
     function deposit() external payable {
+
+        console.log("Interest rate: ", i_rebaseToken.getInterestRate());
         // Here we are assuming that the user is sending ether to the contract
         // And we mint the rebase token to the user's address, calculated based on the current interest rate and especially the msg.value, so the user can get the amount of rebase token as the ether he sent
+    
+
         i_rebaseToken.mint(
             msg.sender,
             msg.value,

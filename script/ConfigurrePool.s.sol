@@ -2,7 +2,8 @@
 pragma solidity ^0.8.24;
 
 import {Script} from "../lib/forge-std/src/Script.sol";
-import {TokenPool, RateLimiter} from "../lib/ccip/contracts/src/v0.8/ccip/tokenAdminRegistry/TokenPoolFactory/TokenPoolFactory.sol";
+import {TokenPool} from "../lib/ccip/contracts/src/v0.8/ccip/pools/TokenPool.sol";
+import {RateLimiter} from "../lib/ccip/contracts/src/v0.8/ccip/libraries/RateLimiter.sol";
 
 contract ConfigurrePool is Script {
     function run(
@@ -18,13 +19,17 @@ contract ConfigurrePool is Script {
         uint128 inboundRateLimiterRate
     ) public {
         vm.startBroadcast();
+
+  bytes[] memory remotePoolAddresses = new bytes[](1);
+        remotePoolAddresses[0] = abi.encode(remotePool);
+
         TokenPool.ChainUpdate[]
             memory chainsToAdd = new TokenPool.ChainUpdate[](1);
         vm.stopBroadcast();
-        chainsToadd[0] = TokenPool.ChainUpdate({
+        chainsToAdd[0] = TokenPool.ChainUpdate({
             remoteChainSelector: remoteChainSelector,
-            remotePoolAddress: remotePool,
-            remoteTokenAddress: remoteToken,
+            remotePoolAddresses: remotePoolAddresses,
+            remoteTokenAddress: abi.encode(remoteToken),
             outboundRateLimiterConfig: RateLimiter.Config({
                 isEnabled: outboundRateLimiterIsEnabled,
                 capacity: outboundRateLimiterCapacity,
@@ -36,6 +41,6 @@ contract ConfigurrePool is Script {
                 rate: inboundRateLimiterRate
             })
         });
-        TokenPool(localPool).applyChainUpdate(new uint64[](0), chainsToAdd);
+        TokenPool(localPool).applyChainUpdates(new uint64[](0), chainsToAdd);
     }
 }

@@ -9,16 +9,19 @@ import {AccessControl} from "../lib/openzeppelin-contracts/contracts/access/Acce
 // Ownable is to assign the contract to certain address so it would belong to THE PERSON, who deployed it.
 import {Ownable} from "../lib/openzeppelin-contracts/contracts/access/Ownable.sol";
 
-contract RebaseToken is Ownable, AccessControl, ERC20 {
+contract RebaseToken is ERC20, Ownable, AccessControl {
     error RebaseToken__InvalidInterestRate();
     error RebaseToken__InvalidMintAndBurnRole();
 
-    // The last time a user updated their balance to mint accrued intrest
+    event NewInterestRate(uint256 rate);
+
+// The last time a user updated their balance to mint accrued intrest
     mapping(address => uint256) private s_lastUpdatedTimestamp;
     // Key-value mapping of user to interest rate
     mapping(address => uint256) private addressToInterest;
 
-    event NewInterestRate(uint256 rate);
+    // Used to handle fixed-point calculations
+    uint256 private constant PRECISION_FACTOR = 1e18;
 
     // This is the global interest rate of the token - when users mint or receive tokens via transferral, this is the interest rate they will get.
     uint256 private s_interestRate = (5 * PRECISION_FACTOR) / 1e8; // 0.000005%
@@ -27,22 +30,22 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
     bytes32 private constant MINT_AND_BURN_ROLE =
         keccak256("MINT_AND_BURN_ROLE");
 
-    // Used to handle fixed-point calculations
-    uint256 private constant PRECISION_FACTOR = 1e18;
 
     constructor(
-        string memory name,
-        string memory symbol
-    ) Ownable(msg.sender) ERC20(name, symbol) {}
+    ) Ownable(msg.sender) ERC20("RebaseToken", "RBT") {}
 
     // This function is created to grant the role to an address, that will be used to mint and burn the token.
     // This function is only callable by the owner of the contract.
     function grantMintAndBurnRole(address _account) external onlyOwner {
-        bool success = _grantRole(MINT_AND_BURN_ROLE, _account);
-        if (!success) {
-            revert RebaseToken__InvalidMintAndBurnRole();
-        }
+     _grantRole(MINT_AND_BURN_ROLE, _account);
+  
     }
+
+ // This function provides the address of the contract owner.
+function getContractsOwnership() external view returns (address) {
+        return owner();
+    }
+
 
     // The function is created to set the interest rate of the token.
     // The function is only callable by the owner of the contract.
@@ -75,8 +78,15 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
     // So given a user with a balance of 100 tokens, and an interest rate of 5%, the balanceOf function will return 105 tokens.
 
     function balanceOf(address _user) public view override returns (uint256) {
+       
+       uint256 currentPrincipleBalance = super.balanceOf(_user);
+
+       if(currentPrincipleBalance == 0) {
+            return 0;
+        }
+       
         return
-            (super.balanceOf(_user) * calculateInterest(_user)) /
+            (currentPrincipleBalance * calculateInterest(_user)) /
             PRECISION_FACTOR;
     }
 
@@ -87,7 +97,8 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
         address to,
         uint256 amount,
         uint256 _userInterestRate
-    ) external onlyRole(MINT_AND_BURN_ROLE) {
+    ) public
+     onlyRole(MINT_AND_BURN_ROLE) {
         // This line here is minting the accrued interest for the user, who is passed as the parameter.
         _mintAccruedInterest(to);
         // This line here is assigning the interest rate to the user, who is passed as the parameter.
@@ -98,7 +109,7 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
 
     // This internal function is responsible for minting the accrued interest for the user.
     // It accumulates all the interest that has been accrued since the last time it was minted.
-    // So given a user with a balance of 100 tokens, and an interest rate of 5%, the balanceOf function will return 105 tokens.
+    // So, given a user with a balance of 100 tokens, and an interest rate of 5%, the balanceOf function will return 105 tokens.
     // The function will mint the 5 tokens, and the user's balance will be updated to 105 tokens.
     // The next time the function is called, it will mint the interest on the 105 tokens, and so on.
     // So let's say in the next year the accrued intrest will start from 105 tokens and not 100.
@@ -152,9 +163,7 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
         address from,
         uint256 value
     ) public onlyRole(MINT_AND_BURN_ROLE) {
-        if (value == type(uint256).max) {
-            value = super.balanceOf(from);
-        }
+
         // This line here is minting the accrued interest for the user, who is passed as the parameter.
         // It's done to make sure that the user is not losing any interest, that has been accrued since the last time it was minted.
         _mintAccruedInterest(from);
@@ -162,10 +171,6 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
         _burn(from, value);
     }
 
-    // This function gets the interest rate of the user, who is passed as the parameter.
-    function getUserInterestRate(address user) external view returns (uint256) {
-        return addressToInterest[user];
-    }
 
     // This function is responsible for transferring the tokens from one user to another.
     function transfer(
@@ -187,11 +192,6 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
         }
         // Finally we return the boolean value of the transfer function, which is inherited from the ERC20 contract.
         return super.transfer(_recipient, _amount);
-    }
-
-    // Here we get the current interest rate available for the user, who is passed as the parameter.
-    function getInterestRate() external view returns (uint256) {
-        return s_interestRate;
     }
 
     // It does the same thing as the transfer function, but it also mint the accrued interest for the recipient.
@@ -216,4 +216,14 @@ contract RebaseToken is Ownable, AccessControl, ERC20 {
         // Finally we return the boolean value of the transfer function, which is inherited from the ERC20 contract.
         return super.transferFrom(_from, _recipient, _amount);
     }
+    function getInterestRate() external view returns (uint256) {
+        return s_interestRate;
+    }
+
+        // This function gets the interest rate of the user, who is passed as the parameter.
+    function getUserInterestRate(address user) external view returns (uint256) {
+        return addressToInterest[user];
+    }
 }
+
+    // Here we get the current interest rate available for the user, who is passed as the parameter.
