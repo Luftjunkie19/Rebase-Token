@@ -22,72 +22,118 @@ contract RebaseTokenTest is Test {
     }
 
 
-    function setUp() public {
-        vm.startPrank(owner);
-        // Initialize the RebaseToken contract with a name and symbol
-        // and set the interest rate to 5e10
-        rebaseToken = new RebaseToken();
+        function setUp() public {
+            vm.startPrank(owner);
+            // Initialize the RebaseToken contract with a name and symbol
+            // and set the interest rate to 5e10
+            rebaseToken = new RebaseToken();
 
-        // Initialize the Vault contract with the RebaseToken instance
-        // and grant the Vault contract mint and burn roles
-        vault = new Vault(IRebaseToken(address(rebaseToken)));
-        rebaseToken.grantMintAndBurnRole(address(vault));
-        vm.stopPrank();
-    }
-
-
-
-    function testDepositLinear(uint256 amount) public {
-      
-      // Deposit funds
-        amount = bound(amount, SEND_VALUE, type(uint96).max);
-
-      
-        vm.startPrank(user);
-        vm.deal(user, amount);
-        vault.deposit{value: amount}();
+            // Initialize the Vault contract with the RebaseToken instance
+            // and grant the Vault contract mint and burn roles
+            vault = new Vault(IRebaseToken(address(rebaseToken)));
+            rebaseToken.grantMintAndBurnRole(address(vault));
+            vm.stopPrank();
+        }
 
 
-// Get the balance of the user
-        uint256 startBalance = rebaseToken.balanceOf(
-            user
-        );
-        console.log("Start balance: ", startBalance);
+        function testDepositLinear(uint256 amount) public {
+        
+        // Deposit funds
+            amount = bound(amount, SEND_VALUE, type(uint96).max);
 
-// Update the timestamp to simulate the passage of time, so that the user can get the interest rate
-        assertEq(startBalance, amount);
+        
+            vm.startPrank(user);
+            vm.deal(user, amount);
+            vault.deposit{value: amount}();
 
-        vm.warp(block.timestamp + 1 hours);
 
-// Set the interest rate to 5e10
-        uint256 midBalance = rebaseToken.balanceOf(
-            user
-        );
+    // Get the balance of the user
+            uint256 startBalance = rebaseToken.balanceOf(
+                user
+            );
+            console.log("Start balance: ", startBalance);
 
-// Check that the balance has increased
-        assertGt(midBalance, startBalance);
+    // Update the timestamp to simulate the passage of time, so that the user can get the interest rate
+            assertEq(startBalance, amount);
 
-        vm.warp(block.timestamp + 1 hours);
+            vm.warp(block.timestamp + 1 hours);
 
-// Check that the balance has increased again
-        uint256 endBalance = rebaseToken.balanceOf(
-            user
-        );
+    // Set the interest rate to 5e10
+            uint256 midBalance = rebaseToken.balanceOf(
+                user
+            );
 
-        assertGt(endBalance, midBalance);
+    // Check that the balance has increased
+            assertGt(midBalance, startBalance);
 
-// assertApproxEqAbs is a function that checks that the difference between two values is within a certain range
-// First param: the difference between the end balance and the mid balance
-// Second param: the difference between the mid balance and the start balance
-// Third param: the range of the difference
-        assertApproxEqAbs(
-            endBalance - midBalance,
-            midBalance - startBalance,
-            1
-        );
+            vm.warp(block.timestamp + 1 hours);
 
-vm.stopPrank();
-    }
+    // Check that the balance has increased again
+            uint256 endBalance = rebaseToken.balanceOf(
+                user
+            );
+
+            assertGt(endBalance, midBalance);
+
+    // assertApproxEqAbs is a function that checks that the difference between two values is within a certain range
+    // First param: the difference between the end balance and the mid balance
+    // Second param: the difference between the mid balance and the start balance
+    // Third param: the range of the difference
+            assertApproxEqAbs(
+                endBalance - midBalance,
+                midBalance - startBalance,
+                1
+            );
+
+    vm.stopPrank();
+        }
+
+
+
+                function testVaultRedeemGivenTheMaxUint256 () public{
+            vm.startPrank(user);
+            
+            vm.deal(user, SEND_VALUE);
+
+            vault.deposit{value: SEND_VALUE}();
+            
+            uint256 balance = rebaseToken.balanceOf(user);
+            
+            assertEq(balance, SEND_VALUE);
+            
+            vault.redeem(type(uint256).max);
+            
+            uint256 ethBalance = address(user).balance;
+            
+            assertEq(ethBalance, SEND_VALUE);
+            assertEq(rebaseToken.balanceOf(user), 0);
+            
+            vm.stopPrank();
+        }
+
+function testRevertTheRedeem() public {
+    // Step 1: Deposit as user and get tokens
+    vm.deal(user, SEND_VALUE);
+    vm.prank(user);
+    vault.deposit{value: SEND_VALUE}();
+    
+    uint256 initialBalance = rebaseToken.balanceOf(user);
+    assertEq(initialBalance, SEND_VALUE);
+
+    // Step 2: Warp time to increase the balance due to rebase interest
+    vm.warp(block.timestamp + 1 days); // Let interest accrue
+
+    // Step 3: Get the new, higher balance after rebase
+    uint256 increasedBalance = rebaseToken.balanceOf(user);
+    assertGt(increasedBalance, initialBalance); // Confirm interest added
+
+    // Step 4: Expect the redeem to fail because vault only has SEND_VALUE ETH
+    vm.expectRevert(Vault.Vault__RedeemFailed.selector);
+    vm.prank(user);
+    vault.redeem(increasedBalance); // Try to redeem more than vault has
+}
+
+
 
     function testRedeemStraightAway(uint256 amount) public {
         amount = bound(amount, SEND_VALUE, type(uint96).max);
@@ -95,13 +141,9 @@ vm.stopPrank();
         vm.deal(user, amount);
         vault.deposit{value: amount}();
 
-        vault.redeem(type(uint96).max);
-
+        vault.redeem(amount);
 uint256 balance = rebaseToken.balanceOf(user);
 
-        assertEq(
-            balance,
-             amount);
         assertEq(address(user).balance, amount);
         assertEq(  balance,
              0);
@@ -113,29 +155,34 @@ uint256 balance = rebaseToken.balanceOf(user);
         uint256 depositAmount,
         uint256 time
     ) public {
-        time = bound(time, 1000, type(uint96).max);
-        depositAmount = bound(depositAmount, SEND_VALUE, type(uint96).max);
+              time = bound(time, 1000, type(uint96).max); // this is a crazy number of years - 2^96 seconds is a lot
+        depositAmount = bound(depositAmount, 1e5, type(uint96).max); // this is an Ether value of max 2^78 which is crazy
 
+        // Deposit funds
         vm.deal(user, depositAmount);
         vm.prank(user);
         vault.deposit{value: depositAmount}();
 
-        vm.warp(block.timestamp + time);
+        // check the balance has increased after some time has passed
+        vm.warp(time);
+
+        // Get balance after time has passed
         uint256 balance = rebaseToken.balanceOf(user);
 
+        // Add rewards to the vault
         vm.deal(owner, balance - depositAmount);
         vm.prank(owner);
-        addRewardToVault(depositAmount - balance);
+        addRewardToVault(balance - depositAmount);
 
+        // Redeem funds
         vm.prank(user);
-        vault.redeem(
-            balance
-        );
+        vault.redeem(balance);
 
         uint256 ethBalance = address(user).balance;
 
-        assertEq(ethBalance, balance);
-        assertGt(ethBalance, depositAmount);
+        assertEq(balance, ethBalance);
+        assertGt(balance, depositAmount);
+
     }
 
 
@@ -288,6 +335,14 @@ function testRedeemAfterTimeHasPassed(uint256 amountDeposited, uint256 time) pub
         assertEq(vault.getRebaseTokenAddress(), address(rebaseToken));
     }
 
+    function testRevertNotElligibleToMint() public {
+        vm.startPrank(user);
+vm.expectRevert();
+        rebaseToken.mint(user, SEND_VALUE, SEND_VALUE);
+        vm.stopPrank();
+    }
+
+
     function testSetInterestRate(uint256 newInterestRate) public {
         newInterestRate = bound(
             newInterestRate,
@@ -307,6 +362,43 @@ function testRedeemAfterTimeHasPassed(uint256 amountDeposited, uint256 time) pub
         uint256 userInterestRate = rebaseToken.getUserInterestRate(user);
         vm.stopPrank();
         assertEq(userInterestRate, newInterestRate);
+    }
+
+    function testMaxUintTransfer() public{
+        vm.startPrank(user);
+        vm.deal(user, SEND_VALUE);
+
+        vault.deposit{value: SEND_VALUE}();
+
+       rebaseToken.transfer(
+  owner , type(uint256).max);
+
+       vm.stopPrank();
+    }
+
+
+    function testMaxUintTransferFrom () public{
+   // Step 1: User deposits and gets tokens
+    vm.startPrank(user);
+    vm.deal(user, SEND_VALUE);
+    vault.deposit{value: SEND_VALUE}();
+
+    uint256 balance = rebaseToken.balanceOf(user);
+    console.log("Balance: ", balance);
+    assertEq(balance, SEND_VALUE);
+
+    // Step 2: User approves owner to spend their tokens
+    rebaseToken.approve(owner, balance);
+    vm.stopPrank(); // End user's prank
+
+    // Step 3: Owner calls transferFrom to move tokens
+    vm.startPrank(owner);
+    rebaseToken.transferFrom(user, owner, type(uint256).max);
+    vm.stopPrank();
+
+    // Optional: Verify the transfer worked
+    assertEq(rebaseToken.balanceOf(owner), balance);
+    assertEq(rebaseToken.balanceOf(user), 0);
     }
 
 

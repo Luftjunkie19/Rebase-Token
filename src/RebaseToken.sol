@@ -114,7 +114,7 @@ function getContractsOwnership() external view returns (address) {
     // The next time the function is called, it will mint the interest on the 105 tokens, and so on.
     // So let's say in the next year the accrued intrest will start from 105 tokens and not 100.
     // This is a thing called compound interest, and it is a very powerful tool.
-    function _mintAccruedInterest(address to) internal onlyOwner {
+    function _mintAccruedInterest(address to) internal  {
         // Here we get the previous balance of the user, who is passed as the parameter.
         // This is the balance before the interest is minted.
         uint256 previousPrincipleBalance = super.balanceOf(to);

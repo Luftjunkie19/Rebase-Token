@@ -56,13 +56,16 @@ contract Vault {
             _amount = i_rebaseToken.balanceOf(msg.sender);
         }
         // Here we check if the user has enough rebase token to redeem
-        i_rebaseToken.burn(msg.sender, _amount);
+     i_rebaseToken.burn(msg.sender, _amount);
+
+
+
         // executes redeem of the underlying asset
         (bool success, ) = payable(msg.sender).call{value: _amount}("");
         if (!success) {
             revert Vault__RedeemFailed();
         }
-        emit Redeem(msg.sender, _amount);
+        emit Redeem(msg.sender, _amount);   
     }
 
     function getRebaseTokenAddress() external view returns (address) {
